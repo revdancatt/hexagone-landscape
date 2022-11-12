@@ -83,6 +83,21 @@ const rgbToHsl = (rgb) => {
   }
 }
 
+const lerpColour = (source, target, amount) => {
+  if (target.h >= 0) {
+    const hueDiff = target.h - source.h
+    if (hueDiff > 180) source.h += 360
+    if (hueDiff < -180) source.h -= 360
+    source.h = source.h + (target.h - source.h) * amount
+    if (source.h > 360) source.h -= 360
+    if (source.h < 0) source.h += 360
+  }
+  // Now lerp between the saturation and lightness of the light colour and the target colour
+  if (target.s >= 0) source.s = source.s + (target.s - source.s) * amount
+  if (target.l >= 0) source.l = source.l + (target.l - source.l) * amount
+  return source
+}
+
 //  Work out what all our features are
 const makeFeatures = () => {
   // features.background = 1
@@ -103,9 +118,56 @@ const makeFeatures = () => {
   features.hexagons = []
   //  We want to have a randome number of hexagons visible across the screen,
   //  we'll base everything else of this number
-  let baseHexCount = Math.floor((fxrand() * 10 + 6) / 2) * 2
-  baseHexCount = 10
+  let baseHexCount = Math.floor((fxrand() * 12 + 2) / 2) * 2
+
+  features.heightMod = 2
+  features.slantMod = 0.23
+
+  // Adjust the hieght and slant based on the number of hexagons
+  if (baseHexCount === 4) {
+    features.heightMod = 1.5
+    features.slantMod = 0.085
+  }
+  if (baseHexCount === 6) {
+    features.heightMod = 1.5
+    features.slantMod = 0.055
+  }
+  if (baseHexCount === 8) {
+    features.heightMod = 1.5
+    features.slantMod = 0.04
+  }
+  if (baseHexCount === 10) {
+    features.heightMod = 2
+    features.slantMod = 0.04
+  }
+  if (baseHexCount === 12) {
+    features.heightMod = 1.75
+    features.slantMod = 0.03
+  }
+  if (baseHexCount === 14) {
+    features.heightMod = 1.5
+    features.slantMod = 0.02
+  }
+  if (baseHexCount === 16) {
+    features.heightMod = 1.5
+    features.slantMod = 0.015
+  }
+  if (baseHexCount === 18) {
+    features.heightMod = 1.25
+    features.slantMod = 0.012
+  }
+  if (baseHexCount === 20) {
+    features.heightMod = 1.5
+    features.slantMod = 0.012
+  }
+  if (baseHexCount === 22) {
+    features.heightMod = 1.5
+    features.slantMod = 0.01
+  }
+  features.heightMod *= Math.sqrt(fxrand() * 4) + 1
+
   baseHexCount *= 2
+
   //  Now we know we want 3 times that many hexagons in the x direction
   const maxHexAcross = baseHexCount * 3
   // And 3 times and the ratio of the screen in the y direction
@@ -154,44 +216,158 @@ const makeFeatures = () => {
   const sideDistance = Math.abs(features.hexagons[middleHexIndex].x - features.hexagons[middleHexIndex - maxHexDown - 1].x)
   const newHexagons = []
 
-  //  Now we want to loop through the hexagons and work the edge points
+  // Set all the offsets for the noise here
+  const xHeightOffset = fxrand() * 1000 + 1234
+  const yHeightOffset = fxrand() * 1000 + 777
+  const xHeightMod = 4
+  const yHeightMod = 4
 
-  features.xOffset = fxrand() * 1000
-  features.yOffset = fxrand() * 1000
+  const xSlopeOffset = fxrand() * 1000 + 800
+  const ySlopeOffset = fxrand() * 1000 + 720
+  const xSlopeMod = 3
+  const ySlopeMod = 5
+
+  const xSlopeAmountOffset = fxrand() * 1000 + 1000
+  const ySlopeAmountOffset = fxrand() * 1000 + 1000
+  const xSlopeAmountMod = 100
+  const ySlopeAmountMod = 200
+
+  const colourMode = ['noon', 'night', 'blueHour', 'goldenHour'][Math.floor(fxrand() * 4)]
+
+  //  Now we want to loop through the hexagons and work the edge points
   for (let i = 0; i < features.hexagons.length; i++) {
     const hex = features.hexagons[i]
     if (hex.colour === 'blue') {
+      // Lets set a random height for the hexagon
+      // Work out the height based on noise
+      hex.height = (noise.perlin2(hex.x * xHeightMod + xHeightOffset, hex.y * yHeightMod + yHeightOffset) + 1) / 2
+      // hex.height = 0
+
       hex.points = {}
       hex.points.topLeft = {
         x: hex.x - xDistance,
-        y: hex.y - yDistance
+        y: hex.y - yDistance,
+        height: hex.height
       }
       hex.points.topRight = {
         x: hex.x + xDistance,
-        y: hex.y - yDistance
+        y: hex.y - yDistance,
+        height: hex.height
       }
       hex.points.right = {
         x: hex.x + sideDistance,
-        y: hex.y
+        y: hex.y,
+        height: hex.height
       }
       hex.points.bottomRight = {
         x: hex.x + xDistance,
-        y: hex.y + yDistance
+        y: hex.y + yDistance,
+        height: hex.height
       }
       hex.points.bottomLeft = {
         x: hex.x - xDistance,
-        y: hex.y + yDistance
+        y: hex.y + yDistance,
+        height: hex.height
       }
       hex.points.left = {
         x: hex.x - sideDistance,
-        y: hex.y
+        y: hex.y,
+        height: hex.height
       }
 
-      //   Lets set a random height for the hexagon
-      // Work out the height based on noise
-      // hex.height = (noise.perlin2(hex.x * 4 + xOffset, hex.y * 4 + yOffset) + 1) / 2
-      hex.lightColour = '#FCF3E8'
+      // Work out the height that the edge should be raised by
+      const raiseHeight = features.slantMod
+
+      // Now we want to work out which side of the hexagon is going to be raised
+      const pickEdge = noise.perlin2(hex.x * xSlopeMod + xSlopeOffset, hex.y * ySlopeMod + ySlopeOffset)
+      // Use inverse sine to convert the noise value into a number between 0 and 360
+      const angle = Math.asin(pickEdge) * 360 / Math.PI * 1.5 + 180
+      // The slope amount is how much the edge is going to be raised by, again controlled by noise
+      let slopeAmount = (noise.perlin2(hex.x * xSlopeAmountMod + xSlopeAmountOffset, hex.y * ySlopeAmountMod + ySlopeAmountOffset) + 1) / 2
+      slopeAmount = 1
+      // angle = 250
+      // This is a very long hand way of working out which edge to raise
+      if (angle < 60) {
+        hex.points.left.height += raiseHeight * slopeAmount
+        hex.points.topLeft.height += raiseHeight * slopeAmount
+        hex.points.topRight.height += raiseHeight / 2 * slopeAmount
+        hex.points.bottomLeft.height += raiseHeight / 2 * slopeAmount
+      }
+      if (angle >= 60 && angle < 120) {
+        hex.points.topLeft.height += raiseHeight * slopeAmount
+        hex.points.topRight.height += raiseHeight * slopeAmount
+        hex.points.left.height += raiseHeight / 2 * slopeAmount
+        hex.points.right.height += raiseHeight / 2 * slopeAmount
+      }
+      if (angle >= 120 && angle < 180) {
+        hex.points.topRight.height += raiseHeight * slopeAmount
+        hex.points.right.height += raiseHeight * slopeAmount
+        hex.points.topLeft.height += raiseHeight / 2 * slopeAmount
+        hex.points.bottomRight.height += raiseHeight / 2 * slopeAmount
+      }
+      if (angle >= 180 && angle < 240) {
+        hex.points.right.height += raiseHeight * slopeAmount
+        hex.points.bottomRight.height += raiseHeight * slopeAmount
+        hex.points.topRight.height += raiseHeight / 2 * slopeAmount
+        hex.points.bottomLeft.height += raiseHeight / 2 * slopeAmount
+      }
+      if (angle >= 240 && angle < 300) {
+        hex.points.bottomRight.height += raiseHeight * slopeAmount
+        hex.points.bottomLeft.height += raiseHeight * slopeAmount
+        hex.points.right.height += raiseHeight / 2 * slopeAmount
+        hex.points.left.height += raiseHeight / 2 * slopeAmount
+      }
+      if (angle >= 300) {
+        hex.points.bottomLeft.height += raiseHeight * slopeAmount
+        hex.points.left.height += raiseHeight * slopeAmount
+        hex.points.bottomRight.height += raiseHeight / 2 * slopeAmount
+        hex.points.topLeft.height += raiseHeight / 2 * slopeAmount
+      }
+
+      hex.lightColour = rgbToHsl(hexToRgb('#FCF3E8'))
       hex.darkColour = rgbToHsl(hexToRgb(RGBCYM[Math.floor(fxrand() * RGBCYM.length)]))
+
+      const shades = {
+        blueHour: {
+          h: 250,
+          s: 40,
+          l: 73,
+          amount: 0.8
+        },
+        goldenHour: {
+          h: 27,
+          s: 100,
+          l: 55,
+          amount: 0.8
+        },
+        night: {
+          h: -1,
+          s: -1,
+          l: 0,
+          amount: 0.7
+        }
+      }
+
+      // const colourMode = ['noon', 'night', 'blueHour', 'goldenHour'][Math.floor(fxrand() * 4)]
+      // console.log(colourMode)
+      // Special colour for night
+      if (colourMode === 'night') {
+        hex.lightColour = {
+          h: 0,
+          s: 0,
+          l: 50
+        }
+      }
+      // How much we want to move towards the target colour
+
+      if (shades[colourMode]) {
+        // Lerp between the hue of the light colour and the target colour, remembering that we can
+        // loop around the hue, without using the lerp function
+        hex.lightColour = lerpColour(hex.lightColour, shades[colourMode], shades[colourMode].amount)
+        // Do the same for the dark colour
+        hex.darkColour = lerpColour(hex.darkColour, shades[colourMode], shades[colourMode].amount)
+      }
+
       newHexagons.push(hex)
     }
   }
@@ -327,7 +503,7 @@ const drawCanvas = async () => {
   }
 
   // Here is the maximum height a hexagon can be
-  const maxHeight = h / 2
+  const maxHeight = h / features.heightMod
 
   // set the fill style to red
   // Set the origin to the middle of the canvas
@@ -337,36 +513,36 @@ const drawCanvas = async () => {
   //  Draw the hexagons
   for (let i = 0; i < features.hexagons.length; i++) {
     const hex = features.hexagons[i]
-    ctx.fillStyle = hex.lightColour
+    ctx.fillStyle = `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l}%)`
 
-    hex.height = (noise.perlin3(hex.x * 4 + features.xOffset, hex.y * 4 + features.yOffset, new Date().getTime() / 2000) + 1) / 2
+    // hex.height = (noise.perlin3(hex.x * 4 + features.xOffset, hex.y * 4 + features.yOffset, new Date().getTime() / 2000) + 1) / 2
 
     // Draw the left of the hexagon
     ctx.beginPath()
     ctx.moveTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y)
-    ctx.lineTo(w * hex.points.bottomLeft.x, (h * hex.points.bottomLeft.y) - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.left.x, (h * hex.points.left.y) - (hex.height * maxHeight))
+    ctx.lineTo(w * hex.points.bottomLeft.x, (h * hex.points.bottomLeft.y) - (hex.points.bottomLeft.height * maxHeight))
+    ctx.lineTo(w * hex.points.left.x, (h * hex.points.left.y) - (hex.points.left.height * maxHeight))
     ctx.lineTo(w * hex.points.left.x, h * hex.points.left.y)
     ctx.lineTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y)
     ctx.fill()
 
     // The top
     ctx.beginPath()
-    ctx.moveTo(w * hex.points.topLeft.x, h * hex.points.topLeft.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.topRight.x, h * hex.points.topRight.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.right.x, h * hex.points.right.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.left.x, h * hex.points.left.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.topLeft.x, h * hex.points.topLeft.y - (hex.height * maxHeight))
+    ctx.moveTo(w * hex.points.topLeft.x, h * hex.points.topLeft.y - (hex.points.topLeft.height * maxHeight))
+    ctx.lineTo(w * hex.points.topRight.x, h * hex.points.topRight.y - (hex.points.topRight.height * maxHeight))
+    ctx.lineTo(w * hex.points.right.x, h * hex.points.right.y - (hex.points.right.height * maxHeight))
+    ctx.lineTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y - (hex.points.bottomRight.height * maxHeight))
+    ctx.lineTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y - (hex.points.bottomLeft.height * maxHeight))
+    ctx.lineTo(w * hex.points.left.x, h * hex.points.left.y - (hex.points.left.height * maxHeight))
+    ctx.lineTo(w * hex.points.topLeft.x, h * hex.points.topLeft.y - (hex.points.topLeft.height * maxHeight))
     ctx.fill()
 
     // Draw the front of the hexagon
     ctx.fillStyle = `hsl(${hex.darkColour.h}, ${hex.darkColour.s}%, ${hex.darkColour.l}%)`
     ctx.beginPath()
     ctx.moveTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y)
-    ctx.lineTo(w * hex.points.bottomLeft.x, (h * hex.points.bottomLeft.y) - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.bottomRight.x, (h * hex.points.bottomRight.y) - (hex.height * maxHeight))
+    ctx.lineTo(w * hex.points.bottomLeft.x, (h * hex.points.bottomLeft.y) - (hex.points.bottomLeft.height * maxHeight))
+    ctx.lineTo(w * hex.points.bottomRight.x, (h * hex.points.bottomRight.y) - (hex.points.bottomRight.height * maxHeight))
     ctx.lineTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y)
     ctx.lineTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y)
     ctx.fill()
@@ -375,8 +551,8 @@ const drawCanvas = async () => {
     ctx.fillStyle = `hsl(${hex.darkColour.h}, ${hex.darkColour.s}%, ${hex.darkColour.l * 0.75}%)`
     ctx.beginPath()
     ctx.moveTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y)
-    ctx.lineTo(w * hex.points.bottomRight.x, (h * hex.points.bottomRight.y) - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.right.x, (h * hex.points.right.y) - (hex.height * maxHeight))
+    ctx.lineTo(w * hex.points.bottomRight.x, (h * hex.points.bottomRight.y) - (hex.points.bottomRight.height * maxHeight))
+    ctx.lineTo(w * hex.points.right.x, (h * hex.points.right.y) - (hex.points.right.height * maxHeight))
     ctx.lineTo(w * hex.points.right.x, h * hex.points.right.y)
     ctx.lineTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y)
     ctx.fill()
@@ -384,10 +560,10 @@ const drawCanvas = async () => {
     //   Now draw the outline
     ctx.lineWidth = w / 300
     ctx.beginPath()
-    ctx.moveTo(w * hex.points.left.x, h * hex.points.left.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.topLeft.x, h * hex.points.topLeft.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.topRight.x, h * hex.points.topRight.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.right.x, h * hex.points.right.y - (hex.height * maxHeight))
+    ctx.moveTo(w * hex.points.left.x, h * hex.points.left.y - (hex.points.left.height * maxHeight))
+    ctx.lineTo(w * hex.points.topLeft.x, h * hex.points.topLeft.y - (hex.points.topLeft.height * maxHeight))
+    ctx.lineTo(w * hex.points.topRight.x, h * hex.points.topRight.y - (hex.points.topRight.height * maxHeight))
+    ctx.lineTo(w * hex.points.right.x, h * hex.points.right.y - (hex.points.right.height * maxHeight))
     ctx.lineTo(w * hex.points.right.x, h * hex.points.right.y)
     ctx.lineTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y)
     ctx.lineTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y)
@@ -398,13 +574,13 @@ const drawCanvas = async () => {
     // Draw the inner lines
     ctx.lineWidth = w / 600
     ctx.beginPath()
-    ctx.moveTo(w * hex.points.left.x, h * hex.points.left.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y - (hex.height * maxHeight))
-    ctx.lineTo(w * hex.points.right.x, h * hex.points.right.y - (hex.height * maxHeight))
-    ctx.moveTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y - (hex.height * maxHeight))
+    ctx.moveTo(w * hex.points.left.x, h * hex.points.left.y - (hex.points.left.height * maxHeight))
+    ctx.lineTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y - (hex.points.bottomLeft.height * maxHeight))
+    ctx.lineTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y - (hex.points.bottomRight.height * maxHeight))
+    ctx.lineTo(w * hex.points.right.x, h * hex.points.right.y - (hex.points.right.height * maxHeight))
+    ctx.moveTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y - (hex.points.bottomLeft.height * maxHeight))
     ctx.lineTo(w * hex.points.bottomLeft.x, h * hex.points.bottomLeft.y)
-    ctx.moveTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y - (hex.height * maxHeight))
+    ctx.moveTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y - (hex.points.bottomRight.height * maxHeight))
     ctx.lineTo(w * hex.points.bottomRight.x, h * hex.points.bottomRight.y)
     ctx.stroke()
   }
