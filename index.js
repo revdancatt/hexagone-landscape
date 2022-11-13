@@ -112,7 +112,14 @@ const rgbToHsl = (rgb) => {
   }
 }
 
-const lerpColour = (source, target, amount) => {
+// Write our own lerp function
+const lerp = (a, b, n) => {
+  return (1 - n) * a + n * b
+}
+
+const lerpColour = (s, t, amount) => {
+  const source = JSON.parse(JSON.stringify(s))
+  const target = JSON.parse(JSON.stringify(t))
   if (target.h >= 0) {
     const hueDiff = target.h - source.h
     if (hueDiff > 180) source.h += 360
@@ -362,7 +369,7 @@ const makeFeatures = () => {
       if (shades[colourMode]) {
         // Lerp between the hue of the light colour and the target colour, remembering that we can
         // loop around the hue, without using the lerp function
-        hex.lightColour = JSON.parse(JSON.stringify(lerpColour(hex.lightColour, shades[colourMode], shades[colourMode].amount)))
+        hex.lightColour = lerpColour(hex.lightColour, shades[colourMode], shades[colourMode].amount)
         // Do the same for the dark colour
         hex.darkColour = lerpColour(hex.darkColour, shades[colourMode], shades[colourMode].amount)
       }
@@ -386,6 +393,27 @@ const makeFeatures = () => {
   }
 
   features.hexagons = newHexagons
+
+  // Maybe we'll rib the hex, but only if there are lines to be drawn
+  features.ribbed = fxrand() < 0.09
+  features.ribbedChance = 0.2
+  if (fxrand() < 0.25) features.ribbedChance = 1
+
+  if (features.hideAllLines) features.ribbed = false
+  // if (features.hideInnerLines) features.ribbed = false
+  if (features.wargamer) features.ribbed = false
+  if (features.gradient) features.ribbed = false
+
+  features.holed = fxrand() < 0.17
+  features.holedChance = 0.1
+  if (fxrand() < 0.25) features.holedChance = 1
+
+  // Add the features
+  for (let i = 0; i < features.hexagons.length; i++) {
+    const hex = features.hexagons[i]
+    if (features.ribbed && fxrand() < features.ribbedChance) hex.ribbed = true
+    if (features.holed && fxrand() < features.holedChance) hex.holed = fxrand() * 0.4 + 0.3
+  }
 
   //  Now loop through all the hexagons rotating the points a small amount
   const squish = 0.5
@@ -424,7 +452,7 @@ const makeFeatures = () => {
   window.$fxhashFeatures.Drawing = 'Lines'
   window.$fxhashFeatures.Style = 'Solid'
   window.$fxhashFeatures.Palette = ['Black', 'RGB', 'CYM', 'RGBCYM', 'Imperial', 'Old', 'Print', 'Spring', 'Stolen from Acequia One', 'Stolen from Acequia Two'][features.darkChoice]
-  window.$fxhashFeatures.Accent = ['Light', 'Lightish', 'Paper', 'Light', 'Lightish', 'Paper', 'Light', 'Lightish', 'Paper', 'Light', 'Lightish', 'Imperceptibly no different', 'Pits', 'Palace', 'Pits', 'Palace', 'Inky'][features.lightChoice]
+  window.$fxhashFeatures.Accent = ['Light', 'Lightish', 'Paper', 'Light', 'Lightish', 'Paper', 'Light', 'Lightish', 'Paper', 'Light', 'Lightish', 'Imperceptibly no different', 'Palace', 'Pits', 'Palace', 'Pits', 'Inky'][features.lightChoice]
   if ('gradient' in features) window.$fxhashFeatures.Style = 'Wash'
   if (features.hideInnerLines) window.$fxhashFeatures.Drawing = 'Cell'
   if (features.hideAllLines) window.$fxhashFeatures.Drawing = 'None'
@@ -503,6 +531,8 @@ const drawHex = (ctx, w, h, hex) => {
   // hex.height = (noise.perlin3(hex.x * 4 + features.xOffset, hex.y * 4 + features.yOffset, new Date().getTime() / 2000) + 1) / 2
   const maxHeight = (hex.points.right.x - hex.points.left.x) * (hex.baseHexCount / 6)
   const slopeAmount = hex.slopeAmount * maxHeight / (hex.baseHexCount / 4)
+  const thickLine = w / 600 * (22 / hex.baseHexCount)
+  const thinLine = w / 1200 * (22 / hex.baseHexCount)
 
   // Now we go through working out the top and bottom points of the hexagon
   const allPoints = {
@@ -619,12 +649,19 @@ const drawHex = (ctx, w, h, hex) => {
   }
   const showTopFace = isClockwise
 
-  // Draw the left of the hexagon
-  if (hex.leftMatchesTop) {
-    ctx.fillStyle = `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l * 0.975}%)`
-  } else {
-    ctx.fillStyle = `hsl(${hex.darkColour.h}, ${hex.darkColour.s}%, ${hex.darkColour.l * 1.2}%)`
+  const leftColour = {
+    h: hex.darkColour.h,
+    s: hex.darkColour.s,
+    l: hex.darkColour.l * 1.2
   }
+  if (hex.leftMatchesTop) {
+    leftColour.h = hex.lightColour.h
+    leftColour.s = hex.lightColour.s
+    leftColour.l = hex.lightColour.l * 0.975
+  }
+  const leftFaceColour = `hsl(${leftColour.h}, ${leftColour.s}%, ${leftColour.l}%)`
+  // Draw the left of the hexagon
+  ctx.fillStyle = leftFaceColour
   ctx.beginPath()
   ctx.moveTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.bottom.bottomLeft.y)
   ctx.lineTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.top.bottomLeft.y)
@@ -633,19 +670,77 @@ const drawHex = (ctx, w, h, hex) => {
   ctx.lineTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.bottom.bottomLeft.y)
   ctx.fill()
 
-  // The top
-  if (showTopFace) {
-    ctx.fillStyle = `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l}%)`
-    ctx.beginPath()
-    ctx.moveTo(w * allPoints.bottom.topLeft.x, h * allPoints.top.topLeft.y)
-    ctx.lineTo(w * allPoints.bottom.topRight.x, h * allPoints.top.topRight.y)
-    ctx.lineTo(w * allPoints.bottom.right.x, h * allPoints.top.right.y)
-    ctx.lineTo(w * allPoints.bottom.bottomRight.x, h * allPoints.top.bottomRight.y)
-    ctx.lineTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.top.bottomLeft.y)
-    ctx.lineTo(w * allPoints.bottom.left.x, h * allPoints.top.left.y)
-    ctx.lineTo(w * allPoints.bottom.topLeft.x, h * allPoints.top.topLeft.y)
-    ctx.fill()
+  // The step for drawing the lines
+  const step = thickLine * 2
+  ctx.lineWidth = thickLine / 2
+  ctx.lineCap = 'square'
+
+  // If the hexagon is ribbed then we need to draw the ribs
+  ctx.save()
+  ctx.clip()
+  if (hex.ribbed) {
+    const ribStart = {
+      x: allPoints.bottom.left.x,
+      y: allPoints.top.left.y
+    }
+    const ribEnd = {
+      x: allPoints.bottom.bottomLeft.x,
+      y: allPoints.top.bottomLeft.y
+    }
+    // Loop around ten times to draw the ribs
+    for (let i = 0; i < 20; i++) {
+      const percent = i / 20
+      const ribColour = lerpColour(hex.darkColour, leftColour, percent)
+      ctx.strokeStyle = `hsl(${ribColour.h}, ${ribColour.s}%, ${ribColour.l}%)`
+      // Draw the rib
+      ctx.beginPath()
+      ctx.moveTo(w * ribStart.x, h * ribStart.y + (step * (i + 1)))
+      ctx.lineTo(w * ribEnd.x, h * ribEnd.y + (step * (i + 1)))
+      ctx.stroke()
+    }
   }
+  ctx.restore()
+
+  // Draw the right of the hexagon
+  const rightFaceColour = `hsl(${hex.darkColour.h}, ${hex.darkColour.s}%, ${hex.darkColour.l * 0.75}%)`
+  ctx.fillStyle = rightFaceColour
+  ctx.beginPath()
+  ctx.moveTo(w * allPoints.bottom.bottomRight.x, h * allPoints.bottom.bottomRight.y)
+  ctx.lineTo(w * allPoints.bottom.bottomRight.x, h * allPoints.top.bottomRight.y)
+  ctx.lineTo(w * allPoints.bottom.right.x, h * allPoints.top.right.y)
+  ctx.lineTo(w * allPoints.bottom.right.x, h * allPoints.bottom.right.y)
+  ctx.lineTo(w * allPoints.bottom.bottomRight.x, h * allPoints.bottom.bottomRight.y)
+  ctx.fill()
+
+  ctx.save()
+  ctx.clip()
+  // If the hexagon is ribbed then we need to draw the ribs
+  if (hex.ribbed) {
+    const ribStart = {
+      x: allPoints.bottom.bottomRight.x,
+      y: allPoints.top.bottomRight.y
+    }
+    const ribEnd = {
+      x: allPoints.bottom.right.x,
+      y: allPoints.top.right.y
+    }
+    // Loop around ten times to draw the ribs
+    for (let i = 0; i < 20; i++) {
+      const percent = i / 20
+      const ribColour = lerpColour(hex.lightColour, {
+        h: hex.darkColour.h,
+        s: hex.darkColour.s,
+        l: hex.darkColour.l * 0.75
+      }, percent)
+      ctx.strokeStyle = `hsl(${ribColour.h}, ${ribColour.s}%, ${ribColour.l}%)`
+      // Draw the rib
+      ctx.beginPath()
+      ctx.moveTo(w * ribStart.x, h * ribStart.y + (step * (i + 1)))
+      ctx.lineTo(w * ribEnd.x, h * ribEnd.y + (step * (i + 1)))
+      ctx.stroke()
+    }
+  }
+  ctx.restore()
 
   // Draw the front of the hexagon
   ctx.fillStyle = `hsl(${hex.darkColour.h}, ${hex.darkColour.s}%, ${hex.darkColour.l}%)`
@@ -665,6 +760,7 @@ const drawHex = (ctx, w, h, hex) => {
     gradient.addColorStop(1, `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l}%)`)
     ctx.fillStyle = gradient
   }
+  const frontFaceColour = ctx.fillStyle
   ctx.beginPath()
   ctx.moveTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.bottom.bottomLeft.y)
   ctx.lineTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.top.bottomLeft.y)
@@ -673,21 +769,53 @@ const drawHex = (ctx, w, h, hex) => {
   ctx.lineTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.bottom.bottomLeft.y)
   ctx.fill()
 
-  // Draw the right of the hexagon
-  ctx.fillStyle = `hsl(${hex.darkColour.h}, ${hex.darkColour.s}%, ${hex.darkColour.l * 0.75}%)`
-  ctx.beginPath()
-  ctx.moveTo(w * allPoints.bottom.bottomRight.x, h * allPoints.bottom.bottomRight.y)
-  ctx.lineTo(w * allPoints.bottom.bottomRight.x, h * allPoints.top.bottomRight.y)
-  ctx.lineTo(w * allPoints.bottom.right.x, h * allPoints.top.right.y)
-  ctx.lineTo(w * allPoints.bottom.right.x, h * allPoints.bottom.right.y)
-  ctx.lineTo(w * allPoints.bottom.bottomRight.x, h * allPoints.bottom.bottomRight.y)
-  ctx.fill()
+  ctx.save()
+  ctx.clip()
+  // If the hexagon is ribbed then we need to draw the ribs
+  if (hex.ribbed) {
+    const ribStart = {
+      x: allPoints.bottom.bottomLeft.x,
+      y: allPoints.top.bottomLeft.y
+    }
+    const ribEnd = {
+      x: allPoints.bottom.bottomRight.x,
+      y: allPoints.top.bottomRight.y
+    }
+    // Loop around ten times to draw the ribs
+    for (let i = 0; i < 20; i++) {
+      const percent = i / 20
+      const ribColour = lerpColour(leftColour, hex.darkColour, percent)
+      ctx.strokeStyle = `hsl(${ribColour.h}, ${ribColour.s}%, ${ribColour.l}%)`
+      // Draw the rib
+      ctx.beginPath()
+      ctx.moveTo(w * ribStart.x, h * ribStart.y + (step * (i + 1)))
+      ctx.lineTo(w * ribEnd.x, h * ribEnd.y + (step * (i + 1)))
+      ctx.stroke()
+    }
+  }
+  ctx.restore()
+
+  // The top
+  if (showTopFace) {
+    ctx.lineWidth = thinLine / 10
+    ctx.fillStyle = `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l}%)`
+    ctx.strokeStyle = `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l}%)`
+    ctx.beginPath()
+    ctx.moveTo(w * allPoints.bottom.topLeft.x, h * allPoints.top.topLeft.y)
+    ctx.lineTo(w * allPoints.bottom.topRight.x, h * allPoints.top.topRight.y)
+    ctx.lineTo(w * allPoints.bottom.right.x, h * allPoints.top.right.y)
+    ctx.lineTo(w * allPoints.bottom.bottomRight.x, h * allPoints.top.bottomRight.y)
+    ctx.lineTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.top.bottomLeft.y)
+    ctx.lineTo(w * allPoints.bottom.left.x, h * allPoints.top.left.y)
+    ctx.lineTo(w * allPoints.bottom.topLeft.x, h * allPoints.top.topLeft.y)
+    ctx.stroke()
+    ctx.fill()
+  }
 
   // Draw all the lines
+  ctx.strokeStyle = 'black'
+  ctx.lineCap = 'round'
   if (!features.hideAllLines) {
-    const thickLine = w / 600 * (22 / hex.baseHexCount)
-    const thinLine = w / 1200 * (22 / hex.baseHexCount)
-
     if (!showTopFace) {
       // Draw the outline
       ctx.lineWidth = thickLine
@@ -742,6 +870,115 @@ const drawHex = (ctx, w, h, hex) => {
         ctx.lineTo(w * allPoints.bottom.bottomRight.x, h * allPoints.bottom.bottomRight.y)
         ctx.stroke()
       }
+    }
+  }
+
+  // If we're showing the top face and this hex has a hole in it, draw the hole
+  if (showTopFace && hex.holed) {
+    // First step is to work out the middle of the face, this is the point
+    // halfway between the top left and right points
+    const middleOfFace = {
+      x: lerp(allPoints.bottom.left.x, allPoints.bottom.right.x, 0.5),
+      y: lerp(allPoints.top.left.y, allPoints.top.right.y, 0.5)
+    }
+    // Now work out all six points of the hole
+    const holePoints = {
+      topLeft: {
+        x: lerp(allPoints.bottom.topLeft.x, middleOfFace.x, hex.holed),
+        y: lerp(allPoints.top.topLeft.y, middleOfFace.y, hex.holed)
+      },
+      topRight: {
+        x: lerp(allPoints.bottom.topRight.x, middleOfFace.x, hex.holed),
+        y: lerp(allPoints.top.topRight.y, middleOfFace.y, hex.holed)
+      },
+      right: {
+        x: lerp(allPoints.bottom.right.x, middleOfFace.x, hex.holed),
+        y: lerp(allPoints.top.right.y, middleOfFace.y, hex.holed)
+      },
+      bottomRight: {
+        x: lerp(allPoints.bottom.bottomRight.x, middleOfFace.x, hex.holed),
+        y: lerp(allPoints.top.bottomRight.y, middleOfFace.y, hex.holed)
+      },
+      bottomLeft: {
+        x: lerp(allPoints.bottom.bottomLeft.x, middleOfFace.x, hex.holed),
+        y: lerp(allPoints.top.bottomLeft.y, middleOfFace.y, hex.holed)
+      },
+      left: {
+        x: lerp(allPoints.bottom.left.x, middleOfFace.x, hex.holed),
+        y: lerp(allPoints.top.left.y, middleOfFace.y, hex.holed)
+      }
+    }
+
+    // Now draw the hole in black
+    // Make the mask
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(w * holePoints.left.x, h * holePoints.left.y)
+    ctx.lineTo(w * holePoints.topLeft.x, h * holePoints.topLeft.y)
+    ctx.lineTo(w * holePoints.topRight.x, h * holePoints.topRight.y)
+    ctx.lineTo(w * holePoints.right.x, h * holePoints.right.y)
+    ctx.lineTo(w * holePoints.bottomRight.x, h * holePoints.bottomRight.y)
+    ctx.lineTo(w * holePoints.bottomLeft.x, h * holePoints.bottomLeft.y)
+    ctx.lineTo(w * holePoints.left.x, h * holePoints.left.y)
+    ctx.closePath()
+    ctx.clip()
+
+    // Now draw the back face
+    ctx.fillStyle = frontFaceColour
+    ctx.beginPath()
+    ctx.moveTo(w * holePoints.topLeft.x, h * holePoints.topLeft.y)
+    ctx.lineTo(w * holePoints.topRight.x, h * holePoints.topRight.y)
+    ctx.lineTo(w * holePoints.topRight.x, h * holePoints.topRight.y + h)
+    ctx.lineTo(w * holePoints.topLeft.x, h * holePoints.topLeft.y + h)
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.fillStyle = leftFaceColour
+    ctx.beginPath()
+    ctx.moveTo(w * holePoints.topRight.x, h * holePoints.topRight.y)
+    ctx.lineTo(w * holePoints.right.x, h * holePoints.right.y)
+    ctx.lineTo(w * holePoints.right.x, h * holePoints.right.y + h)
+    ctx.lineTo(w * holePoints.topRight.x, h * holePoints.topRight.y + h)
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.fillStyle = rightFaceColour
+    ctx.beginPath()
+    ctx.moveTo(w * holePoints.left.x, h * holePoints.left.y)
+    ctx.lineTo(w * holePoints.topLeft.x, h * holePoints.topLeft.y)
+    ctx.lineTo(w * holePoints.topLeft.x, h * holePoints.topLeft.y + h)
+    ctx.lineTo(w * holePoints.left.x, h * holePoints.left.y + h)
+    ctx.closePath()
+    ctx.fill()
+
+    // If we are not hiding the inner lines, draw them
+    if (!features.hideInnerLines && !features.hideAllLines) {
+      ctx.strokeStyle = 'black'
+      ctx.lineWidth = thinLine
+      ctx.beginPath()
+      ctx.moveTo(w * holePoints.topLeft.x, h * holePoints.topLeft.y)
+      ctx.lineTo(w * holePoints.topLeft.x, h * holePoints.topLeft.y + h)
+      ctx.moveTo(w * holePoints.topRight.x, h * holePoints.topRight.y)
+      ctx.lineTo(w * holePoints.topRight.x, h * holePoints.topRight.y + h)
+      ctx.stroke()
+    }
+
+    // Clear the mask
+    ctx.restore()
+
+    // If we're not hiding all the lines draw the hole lines
+    if (!features.hideAllLines) {
+      ctx.strokeStyle = 'black'
+      ctx.lineWidth = thinLine
+      ctx.beginPath()
+      ctx.moveTo(w * holePoints.left.x, h * holePoints.left.y)
+      ctx.lineTo(w * holePoints.topLeft.x, h * holePoints.topLeft.y)
+      ctx.lineTo(w * holePoints.topRight.x, h * holePoints.topRight.y)
+      ctx.lineTo(w * holePoints.right.x, h * holePoints.right.y)
+      ctx.lineTo(w * holePoints.bottomRight.x, h * holePoints.bottomRight.y)
+      ctx.lineTo(w * holePoints.bottomLeft.x, h * holePoints.bottomLeft.y)
+      ctx.lineTo(w * holePoints.left.x, h * holePoints.left.y)
+      ctx.stroke()
     }
   }
 }
