@@ -1,4 +1,4 @@
-/* global preloadImagesTmr fxhash fxrand noise paper1Loaded */
+/* global preloadImagesTmr fxhash fxrand noise */
 
 //
 //  fxhash - Hexagones Landscape
@@ -35,8 +35,37 @@ const BLUE = '#3c539d'
 const CYAN = '#6dcbdb'
 const YELLOW = '#f2e643'
 const MAGENTA = '#b64f98'
-const BLACK = '#000000'
+const BLACK = ['#000000']
 const RGBCYM = [RED, GREEN, BLUE, CYAN, MAGENTA, YELLOW]
+const RGB = [RED, GREEN, BLUE]
+const CYM = [CYAN, MAGENTA, YELLOW]
+
+const shades = {
+  blueHour: {
+    h: 210,
+    s: 100,
+    l: 90,
+    amount: 0.8
+  },
+  green: {
+    h: 120,
+    s: 100,
+    l: 20,
+    amount: 0.9
+  },
+  goldenHour: {
+    h: 30,
+    s: 100,
+    l: 55,
+    amount: 0.4
+  },
+  night: {
+    h: -1,
+    s: -1,
+    l: 0,
+    amount: 0.4
+  }
+}
 
 const hexToRgb = (hex) => {
   const result = /([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -112,15 +141,15 @@ const makeFeatures = () => {
     }
   }
 
-  // THIS IS A VERY BAD WAY OF PLACING THE HEXAGONS, DON'T DO THIS!!!!
-
   // We want somewhere to store all the hexagon co-ordiantes
   features.hexagons = []
   //  We want to have a randome number of hexagons visible across the screen,
   //  we'll base everything else of this number
-  let baseHexCount = Math.floor((fxrand() * 12 + 2) / 2) * 2
-  // baseHexCount = 22
-  baseHexCount *= 2
+  let baseHexCount = Math.floor((fxrand() * 10 + 2) / 2) * 4
+  if (fxrand() < 0.04) {
+    features.excessive = true
+    baseHexCount = (baseHexCount + 12) * 2
+  }
 
   //  Now we know we want 3 times that many hexagons in the x direction
   const maxHexAcross = baseHexCount * 3
@@ -129,7 +158,10 @@ const makeFeatures = () => {
   // Store them so we know how many we have later
   features.maxHexAcross = maxHexAcross
   features.maxHexDown = maxHexDown
-  //   Now loop throught them creating the hexagons, but we want to start
+
+  // THIS IS A VERY BAD WAY OF PLACING THE HEXAGONS, DON'T DO THIS!!!!
+
+  // Now loop throught them creating the hexagons, but we want to start
   // with negative values so it's all centered on 0,0
   let xCount = 0
   for (let x = -maxHexAcross / 2; x <= maxHexAcross / 2; x++) {
@@ -188,17 +220,6 @@ const makeFeatures = () => {
   const xSlopeAmountMod = 100
   const ySlopeAmountMod = 200
 
-  //   Colours
-  const colourMode = ['noon', 'night', 'blueHour', 'goldenHour'][Math.floor(fxrand() * 5)]
-  // colourMode = 'noon'
-
-  if (fxrand() < 0.2) {
-    features.gradient = 'light'
-    if (fxrand() < 0.5) {
-      features.gradient = 'dark'
-    }
-  }
-
   // Work out if we are doing threshold stuff
   if (fxrand() < 0.15) {
     features.threshhold = fxrand() * 0.4 + 0.4
@@ -206,7 +227,7 @@ const makeFeatures = () => {
     if (fxrand() < 0.4) features.flatLand = true
   }
   // Sometimes have a flat top
-  if (fxrand() < 0.1) features.flatSlopes = true
+  if (fxrand() < 0.25) features.flatSlopes = true
   // Sometimes break things down into three levels
   if (fxrand() < 0.2) features.threeLevels = true
   // If they are all facing one way
@@ -217,6 +238,31 @@ const makeFeatures = () => {
   // Should we hide all the lines
   if (fxrand() < 0.15) features.hideAllLines = true
 
+  const lightPalettes = ['#FFFFFF', '#FCF3E8', '#EDDCC0', '#FFFFFF', '#FCF3E8', '#EDDCC0', '#FFFFFF', '#FCF3E8', '#EDDCC0', '#FFFFFF', '#FCF3E8', '#EBD5B0', '#2B6EA1', '#A12B4C', '#2B6EA1', '#A12B4C', '#333333']
+  const darkPalettes = [BLACK, RGB, CYM, RGBCYM, [RED, BLUE], [RED], [BLUE], [YELLOW, GREEN, CYAN], ['#264F78', '#E19FC5'], ['#CF5155', '#FCBA41', '#DE723F']]
+  features.lightChoice = Math.floor(fxrand() * lightPalettes.length)
+  features.darkChoice = Math.floor(fxrand() * darkPalettes.length)
+
+  features.lightColour = rgbToHsl(hexToRgb(lightPalettes[features.lightChoice]))
+  features.darkColour = darkPalettes[features.darkChoice]
+  if (fxrand() < 0.75) features.leftMatchesTop = true
+
+  const colourModes = ['night', 'blueHour', 'goldenHour', 'night', 'blueHour', 'goldenHour', 'blueHour', 'goldenHour', 'blueHour', 'goldenHour', 'green']
+  let colourMode = 'noon'
+  if (fxrand() < 0.2) {
+    colourMode = colourModes[Math.floor(fxrand() * colourModes.length)]
+  }
+  if (fxrand() < 0.08) features.shuffleTint = true
+
+  //   Sometimes use a gradient
+  if (fxrand() < 0.2) {
+    features.gradient = 'light'
+    if (fxrand() < 0.5) {
+      features.gradient = 'dark'
+    }
+  }
+
+  let totalHeight = 0
   //  Now we want to loop through the hexagons and work the edge points
   for (let i = 0; i < features.hexagons.length; i++) {
     const hex = features.hexagons[i]
@@ -236,7 +282,7 @@ const makeFeatures = () => {
           if (features.lowerWithThreshhold) hex.height = (hex.height - features.threshhold + 0.1)
         }
       }
-      // hex.height = 0
+      totalHeight += hex.height
 
       hex.points = {}
       hex.points.topLeft = {
@@ -289,72 +335,20 @@ const makeFeatures = () => {
       // hex.slopeAmount = 1
       hex.angle = angle
       if (features.allFacingOneWay) hex.angle = features.allFacingOneWay
-      console.log(features.allFacingOneWay)
-      // This is a very long hand way of working out which edge to raise
-      /*
-      if (angle < 60) {
-        hex.points.left.height += raiseHeight * slopeAmount
-        hex.points.topLeft.height += raiseHeight * slopeAmount
-        hex.points.topRight.height += raiseHeight / 2 * slopeAmount
-        hex.points.bottomLeft.height += raiseHeight / 2 * slopeAmount
-      }
-      if (angle >= 60 && angle < 120) {
-        hex.points.topLeft.height += raiseHeight * slopeAmount
-        hex.points.topRight.height += raiseHeight * slopeAmount
-        hex.points.left.height += raiseHeight / 2 * slopeAmount
-        hex.points.right.height += raiseHeight / 2 * slopeAmount
-      }
-      if (angle >= 120 && angle < 180) {
-        hex.points.topRight.height += raiseHeight * slopeAmount
-        hex.points.right.height += raiseHeight * slopeAmount
-        hex.points.topLeft.height += raiseHeight / 2 * slopeAmount
-        hex.points.bottomRight.height += raiseHeight / 2 * slopeAmount
-      }
-      if (angle >= 180 && angle < 240) {
-        hex.points.right.height += raiseHeight * slopeAmount
-        hex.points.bottomRight.height += raiseHeight * slopeAmount
-        hex.points.topRight.height += raiseHeight / 2 * slopeAmount
-        hex.points.bottomLeft.height += raiseHeight / 2 * slopeAmount
-      }
-      if (angle >= 240 && angle < 300) {
-        hex.points.bottomRight.height += raiseHeight * slopeAmount
-        hex.points.bottomLeft.height += raiseHeight * slopeAmount
-        hex.points.right.height += raiseHeight / 2 * slopeAmount
-        hex.points.left.height += raiseHeight / 2 * slopeAmount
-      }
-      if (angle >= 300) {
-        hex.points.bottomLeft.height += raiseHeight * slopeAmount
-        hex.points.left.height += raiseHeight * slopeAmount
-        hex.points.bottomRight.height += raiseHeight / 2 * slopeAmount
-        hex.points.topLeft.height += raiseHeight / 2 * slopeAmount
-      }
-      */
-      hex.lightColour = rgbToHsl(hexToRgb('#FCF3E8'))
-      hex.darkColour = rgbToHsl(hexToRgb(RGBCYM[Math.floor(fxrand() * RGBCYM.length)]))
 
-      const shades = {
-        blueHour: {
-          h: 250,
-          s: 40,
-          l: 73,
-          amount: 0.8
-        },
-        goldenHour: {
-          h: 27,
-          s: 100,
-          l: 55,
-          amount: 0.8
-        },
-        night: {
-          h: -1,
-          s: -1,
-          l: 0,
-          amount: 0.7
+      //   Colours
+      if (features.shuffleTint) {
+        colourMode = 'noon'
+        if (fxrand() < 0.99) {
+          colourMode = ['blueHour', 'goldenHour', 'blueHour', 'goldenHour', 'green'][Math.floor(fxrand() * 5)]
         }
       }
+      // console.log('colourMode', colourMode)
 
-      // const colourMode = ['noon', 'night', 'blueHour', 'goldenHour'][Math.floor(fxrand() * 4)]
-      // console.log(colourMode)
+      hex.lightColour = features.lightColour
+      hex.darkColour = rgbToHsl(hexToRgb(features.darkColour[Math.floor(fxrand() * features.darkColour.length)]))
+      hex.leftMatchesTop = features.leftMatchesTop
+
       // Special colour for night
       if (colourMode === 'night') {
         hex.lightColour = {
@@ -368,12 +362,26 @@ const makeFeatures = () => {
       if (shades[colourMode]) {
         // Lerp between the hue of the light colour and the target colour, remembering that we can
         // loop around the hue, without using the lerp function
-        hex.lightColour = lerpColour(hex.lightColour, shades[colourMode], shades[colourMode].amount)
+        hex.lightColour = JSON.parse(JSON.stringify(lerpColour(hex.lightColour, shades[colourMode], shades[colourMode].amount)))
         // Do the same for the dark colour
         hex.darkColour = lerpColour(hex.darkColour, shades[colourMode], shades[colourMode].amount)
       }
-
       newHexagons.push(hex)
+    }
+  }
+
+  if (totalHeight === 0) {
+    for (let i = 0; i < features.hexagons.length; i++) {
+      const hex = features.hexagons[i]
+      const pickEdge = noise.perlin2(hex.x * xSlopeMod + xSlopeOffset, hex.y * ySlopeMod + ySlopeOffset)
+      // Use inverse sine to convert the noise value into a number between 0 and 360
+      const angle = Math.asin(pickEdge) * 360 / Math.PI * 1.5 + 180
+      // The slope amount is how much the edge is going to be raised by, again controlled by noise
+      const slopeAmount = (noise.perlin2(hex.x * xSlopeAmountMod + xSlopeAmountOffset, hex.y * ySlopeAmountMod + ySlopeAmountOffset) + 1) / 2
+      hex.slopeAmount = slopeAmount * 0.25
+      hex.angle = angle
+      features.flatSlopes = false
+      features.wargamer = true
     }
   }
 
@@ -405,6 +413,29 @@ const makeFeatures = () => {
   features.hexagons.sort((a, b) => {
     return a.y - b.y
   })
+
+  // DO NOT LOOK AT HOW I AM DOING THESE, I AM NOW TIRED
+  window.$fxhashFeatures.Excessive = false
+  if (features.excessive) window.$fxhashFeatures.Excessive = true
+  window.$fxhashFeatures.Valleys = 'threshhold' in features
+  window.$fxhashFeatures['Flat Tops'] = 'flatSlopes' in features
+  window.$fxhashFeatures.Levels = 'threeLevels' in features && 'flatSlopes' in features
+  window.$fxhashFeatures['Sun Salutation'] = 'allFacingOneWay' in features
+  window.$fxhashFeatures.Drawing = 'Lines'
+  window.$fxhashFeatures.Style = 'Solid'
+  window.$fxhashFeatures.Palette = ['Black', 'RGB', 'CYM', 'RGBCYM', 'Imperial', 'Old', 'Print', 'Spring', 'Stolen from Acequia One', 'Stolen from Acequia Two'][features.darkChoice]
+  window.$fxhashFeatures.Accent = ['Light', 'Lightish', 'Paper', 'Light', 'Lightish', 'Paper', 'Light', 'Lightish', 'Paper', 'Light', 'Lightish', 'Imperceptibly no different', 'Pits', 'Palace', 'Pits', 'Palace', 'Inky'][features.lightChoice]
+  if ('gradient' in features) window.$fxhashFeatures.Style = 'Wash'
+  if (features.hideInnerLines) window.$fxhashFeatures.Drawing = 'Cell'
+  if (features.hideAllLines) window.$fxhashFeatures.Drawing = 'None'
+  window.$fxhashFeatures.Tint = colourMode
+  if (colourMode === 'noon') window.$fxhashFeatures.Tint = 'Noon'
+  if (colourMode === 'blueHour') window.$fxhashFeatures.Tint = 'Blue hour'
+  if (colourMode === 'goldenHour') window.$fxhashFeatures.Tint = 'Golden hour'
+  if (colourMode === 'green') window.$fxhashFeatures.Tint = 'Green'
+  if (colourMode === 'night') window.$fxhashFeatures.Tint = 'Night'
+  if (features.shuffleTint) window.$fxhashFeatures.Tint = 'Shuffle'
+  window.$fxhashFeatures['Wargame map'] = 'wargamer' in features
 }
 
 //  Call the above make features, so we'll have the window.$fxhashFeatures available
@@ -463,21 +494,6 @@ const layoutCanvas = async () => {
   canvas.style.height = `${cHeight}px`
   canvas.style.left = `${(wWidth - cWidth) / 2}px`
   canvas.style.top = `${(wHeight - cHeight) / 2}px`
-
-  //  Re-Create the paper pattern
-  const paper1 = document.createElement('canvas')
-  paper1.width = canvas.width / 2
-  paper1.height = canvas.height / 2
-  const paper1Ctx = paper1.getContext('2d')
-  await paper1Ctx.drawImage(paper1Loaded, 0, 0, 1920, 1920, 0, 0, paper1.width, paper1.height)
-  features.paper1Pattern = paper1Ctx.createPattern(paper1, 'repeat')
-
-  const paper2 = document.createElement('canvas')
-  paper2.width = canvas.width / (22 / 7)
-  paper2.height = canvas.height / (22 / 7)
-  const paper2Ctx = paper2.getContext('2d')
-  await paper2Ctx.drawImage(paper1Loaded, 0, 0, 1920, 1920, 0, 0, paper2.width, paper2.height)
-  features.paper2Pattern = paper2Ctx.createPattern(paper2, 'repeat')
 
   //  And draw it!!
   drawCanvas()
@@ -604,7 +620,11 @@ const drawHex = (ctx, w, h, hex) => {
   const showTopFace = isClockwise
 
   // Draw the left of the hexagon
-  ctx.fillStyle = `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l * 0.975}%)`
+  if (hex.leftMatchesTop) {
+    ctx.fillStyle = `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l * 0.975}%)`
+  } else {
+    ctx.fillStyle = `hsl(${hex.darkColour.h}, ${hex.darkColour.s}%, ${hex.darkColour.l * 1.2}%)`
+  }
   ctx.beginPath()
   ctx.moveTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.bottom.bottomLeft.y)
   ctx.lineTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.top.bottomLeft.y)
@@ -614,16 +634,18 @@ const drawHex = (ctx, w, h, hex) => {
   ctx.fill()
 
   // The top
-  ctx.fillStyle = `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l}%)`
-  ctx.beginPath()
-  ctx.moveTo(w * allPoints.bottom.topLeft.x, h * allPoints.top.topLeft.y)
-  ctx.lineTo(w * allPoints.bottom.topRight.x, h * allPoints.top.topRight.y)
-  ctx.lineTo(w * allPoints.bottom.right.x, h * allPoints.top.right.y)
-  ctx.lineTo(w * allPoints.bottom.bottomRight.x, h * allPoints.top.bottomRight.y)
-  ctx.lineTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.top.bottomLeft.y)
-  ctx.lineTo(w * allPoints.bottom.left.x, h * allPoints.top.left.y)
-  ctx.lineTo(w * allPoints.bottom.topLeft.x, h * allPoints.top.topLeft.y)
-  ctx.fill()
+  if (showTopFace) {
+    ctx.fillStyle = `hsl(${hex.lightColour.h}, ${hex.lightColour.s}%, ${hex.lightColour.l}%)`
+    ctx.beginPath()
+    ctx.moveTo(w * allPoints.bottom.topLeft.x, h * allPoints.top.topLeft.y)
+    ctx.lineTo(w * allPoints.bottom.topRight.x, h * allPoints.top.topRight.y)
+    ctx.lineTo(w * allPoints.bottom.right.x, h * allPoints.top.right.y)
+    ctx.lineTo(w * allPoints.bottom.bottomRight.x, h * allPoints.top.bottomRight.y)
+    ctx.lineTo(w * allPoints.bottom.bottomLeft.x, h * allPoints.top.bottomLeft.y)
+    ctx.lineTo(w * allPoints.bottom.left.x, h * allPoints.top.left.y)
+    ctx.lineTo(w * allPoints.bottom.topLeft.x, h * allPoints.top.topLeft.y)
+    ctx.fill()
+  }
 
   // Draw the front of the hexagon
   ctx.fillStyle = `hsl(${hex.darkColour.h}, ${hex.darkColour.s}%, ${hex.darkColour.l}%)`
@@ -736,20 +758,8 @@ const drawCanvas = async () => {
   const w = canvas.width
   const h = canvas.height
 
-  //  Lay down the paper texture
-  if (drawPaper) {
-    ctx.fillStyle = features.paper1Pattern
-    ctx.save()
-    ctx.translate(-w * features.paperOffset.paper1.x, -h * features.paperOffset.paper1.y)
-    ctx.fillRect(0, 0, w * 2, h * 2)
-    ctx.restore()
-  } else {
-    ctx.fillStyle = '#F9F9F9'
-    ctx.fillRect(0, 0, w, h)
-  }
-
-  // Here is the maximum height a hexagon can be
-  const maxHeight = h / features.heightMod
+  ctx.fillStyle = '#F9F9F9'
+  ctx.fillRect(0, 0, w, h)
 
   // set the fill style to red
   // Set the origin to the middle of the canvas
@@ -804,6 +814,7 @@ document.addEventListener('keypress', async (e) => {
   //   Toggle highres mode
   if (e.key === 'h') {
     highRes = !highRes
+    console.log('Highres mode is now', highRes)
     await layoutCanvas()
   }
 
@@ -822,7 +833,7 @@ document.addEventListener('keypress', async (e) => {
 // eslint-disable-next-line no-unused-vars
 const preloadImages = () => {
   //  If paper1 has loaded and we haven't draw anything yet, then kick it all off
-  if (paper1Loaded !== null && !drawn) {
+  if (!drawn) {
     clearInterval(preloadImagesTmr)
     init()
   }
