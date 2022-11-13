@@ -238,7 +238,7 @@ const makeFeatures = () => {
   // Sometimes break things down into three levels
   if (fxrand() < 0.2) features.threeLevels = true
   // If they are all facing one way
-  if (fxrand() < 0.1) features.allFacingOneWay = Math.floor(fxrand() * 6) * 60 + 1
+  if (fxrand() < 0.12) features.allFacingOneWay = Math.floor(fxrand() * 6) * 60 + 1
 
   // Should we hide the inner lines
   if (fxrand() < 0.15) features.hideInnerLines = true
@@ -338,6 +338,7 @@ const makeFeatures = () => {
       }
       hex.slopeAmount = slopeAmount
       if (features.flatSlopes) hex.slopeAmount = 0
+      if (features.allFacingOneWay) hex.slopeAmount = 0.6
 
       // hex.slopeAmount = 1
       hex.angle = angle
@@ -447,6 +448,7 @@ const makeFeatures = () => {
   if (features.excessive) window.$fxhashFeatures.Excessive = true
   window.$fxhashFeatures.Valleys = 'threshhold' in features
   window.$fxhashFeatures['Flat Tops'] = 'flatSlopes' in features
+  if ('allFacingOneWay' in features) window.$fxhashFeatures['Flat Tops'] = false
   window.$fxhashFeatures.Levels = 'threeLevels' in features && 'flatSlopes' in features
   window.$fxhashFeatures['Sun Salutation'] = 'allFacingOneWay' in features
   window.$fxhashFeatures.Drawing = 'Lines'
@@ -463,7 +465,6 @@ const makeFeatures = () => {
   if (colourMode === 'green') window.$fxhashFeatures.Tint = 'Green'
   if (colourMode === 'night') window.$fxhashFeatures.Tint = 'Night'
   if (features.shuffleTint) window.$fxhashFeatures.Tint = 'Shuffle'
-  window.$fxhashFeatures['Wargame map'] = 'wargamer' in features
 }
 
 //  Call the above make features, so we'll have the window.$fxhashFeatures available
@@ -533,6 +534,8 @@ const drawHex = (ctx, w, h, hex) => {
   const slopeAmount = hex.slopeAmount * maxHeight / (hex.baseHexCount / 4)
   const thickLine = w / 600 * (22 / hex.baseHexCount)
   const thinLine = w / 1200 * (22 / hex.baseHexCount)
+  let lineColour = 'black'
+  if (window.$fxhashFeatures.Palette === 'Black' && window.$fxhashFeatures.Accent === 'Inky') lineColour = 'white'
 
   // Now we go through working out the top and bottom points of the hexagon
   const allPoints = {
@@ -813,7 +816,7 @@ const drawHex = (ctx, w, h, hex) => {
   }
 
   // Draw all the lines
-  ctx.strokeStyle = 'black'
+  ctx.strokeStyle = lineColour
   ctx.lineCap = 'round'
   if (!features.hideAllLines) {
     if (!showTopFace) {
@@ -953,7 +956,7 @@ const drawHex = (ctx, w, h, hex) => {
 
     // If we are not hiding the inner lines, draw them
     if (!features.hideInnerLines && !features.hideAllLines) {
-      ctx.strokeStyle = 'black'
+      ctx.strokeStyle = lineColour
       ctx.lineWidth = thinLine
       ctx.beginPath()
       ctx.moveTo(w * holePoints.topLeft.x, h * holePoints.topLeft.y)
@@ -968,7 +971,7 @@ const drawHex = (ctx, w, h, hex) => {
 
     // If we're not hiding all the lines draw the hole lines
     if (!features.hideAllLines) {
-      ctx.strokeStyle = 'black'
+      ctx.strokeStyle = lineColour
       ctx.lineWidth = thinLine
       ctx.beginPath()
       ctx.moveTo(w * holePoints.left.x, h * holePoints.left.y)
